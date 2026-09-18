@@ -438,8 +438,12 @@ async function sendTriggerLog({ message, keyword, attachment }) {
 }
 
 async function handleChatInputCommand(interaction) {
-    if (interaction.commandName === 'trigger_add') {
+    // Defer ngay lập tức để tránh lỗi "Ứng dụng không phản hồi" khi
+    // xử lý mất hơn 3 giây (ví dụ bot vừa mới khởi động, I/O chậm...).
+    // Sau defer, Discord cho tối đa 15 phút để trả lời qua editReply().
+    await interaction.deferReply({ ephemeral: true });
 
+    if (interaction.commandName === 'trigger_add') {
         const keyword = normalizeKeyword(interaction.options.getString('keyword'));
         const content = interaction.options.getString('content').trim();
         const channel = interaction.options.getChannel('channel');
@@ -447,25 +451,22 @@ async function handleChatInputCommand(interaction) {
         const sendOnce = interaction.options.getBoolean('send_once');
 
         if (!isValidKeyword(keyword)) {
-            await interaction.reply({
-                content: '❌ Keyword phải viết liền, không chứa khoảng trắng và dài tối đa 64 ký tự.',
-                ephemeral: true
+            await interaction.editReply({
+                content: '❌ Keyword phải viết liền, không chứa khoảng trắng và dài tối đa 64 ký tự.'
             });
             return;
         }
 
         if (!content) {
-            await interaction.reply({
-                content: '❌ Nội dung DM không được để trống.',
-                ephemeral: true
+            await interaction.editReply({
+                content: '❌ Nội dung DM không được để trống.'
             });
             return;
         }
 
         if (db.triggers[keyword]) {
-            await interaction.reply({
-                content: `❌ Trigger **${keyword}** đã tồn tại. Dùng \`/edit-trigger\` để chỉnh sửa.`,
-                ephemeral: true
+            await interaction.editReply({
+                content: `❌ Trigger **${keyword}** đã tồn tại. Dùng \`/edit-trigger\` để chỉnh sửa.`
             });
             return;
         }
@@ -479,13 +480,12 @@ async function handleChatInputCommand(interaction) {
         };
         saveData(db);
 
-        await interaction.reply({
+        await interaction.editReply({
             content:
                 `✅ Đã thêm trigger **${keyword}**.\n` +
                 `- Kênh được phép: <#${channel.id}>\n` +
                 `- Bắt buộc ảnh: **${yesNo(requireImage)}**\n` +
-                `- Chỉ gửi một lần / user: **${yesNo(sendOnce)}**`,
-            ephemeral: true
+                `- Chỉ gửi một lần / user: **${yesNo(sendOnce)}**`
         });
         return;
     }
@@ -494,9 +494,8 @@ async function handleChatInputCommand(interaction) {
         const keyword = normalizeKeyword(interaction.options.getString('keyword'));
 
         if (!db.triggers[keyword]) {
-            await interaction.reply({
-                content: `❌ Không tìm thấy trigger **${keyword}**.`,
-                ephemeral: true
+            await interaction.editReply({
+                content: `❌ Không tìm thấy trigger **${keyword}**.`
             });
             return;
         }
@@ -504,9 +503,8 @@ async function handleChatInputCommand(interaction) {
         delete db.triggers[keyword];
         saveData(db);
 
-        await interaction.reply({
-            content: `✅ Đã xoá trigger **${keyword}**.`,
-            ephemeral: true
+        await interaction.editReply({
+            content: `✅ Đã xoá trigger **${keyword}**.`
         });
         return;
     }
@@ -514,14 +512,17 @@ async function handleChatInputCommand(interaction) {
     if (interaction.commandName === 'edit-trigger') {
         const keywords = Object.keys(db.triggers);
         if (keywords.length === 0) {
-            await interaction.reply({
-                content: 'Chưa có trigger nào. Hãy dùng `/trigger_add` trước.',
-                ephemeral: true
+            await interaction.editReply({
+                content: 'Chưa có trigger nào. Hãy dùng `/trigger_add` trước.'
             });
             return;
         }
 
-        await interaction.reply(buildTriggerListPage(interaction.user.id));
+        const page = buildTriggerListPage(interaction.user.id);
+        await interaction.editReply({
+            content: page.content,
+            components: page.components
+        });
         return;
     }
 
@@ -530,9 +531,8 @@ async function handleChatInputCommand(interaction) {
         db.logChannel = channel.id;
         saveData(db);
 
-        await interaction.reply({
-            content: `✅ Đã lưu kênh log trigger tại <#${channel.id}>.`,
-            ephemeral: true
+        await interaction.editReply({
+            content: `✅ Đã lưu kênh log trigger tại <#${channel.id}>.`
         });
         return;
     }
@@ -540,9 +540,8 @@ async function handleChatInputCommand(interaction) {
     if (interaction.commandName === 'send') {
         const content = interaction.options.getString('content');
         await interaction.channel.send(content);
-        await interaction.reply({
-            content: '✅ Đã gửi tin nhắn vào kênh hiện tại.',
-            ephemeral: true
+        await interaction.editReply({
+            content: '✅ Đã gửi tin nhắn vào kênh hiện tại.'
         });
     }
 }
@@ -741,7 +740,9 @@ client.on('interactionCreate', async interaction => {
         };
 
         if (interaction.replied || interaction.deferred) {
-            await interaction.followUp(reply).catch(console.error);
+            await interaction.editReply(reply).catch(() => {
+                interaction.followUp(reply).catch(console.error);
+            });
         } else {
             await interaction.reply(reply).catch(console.error);
         }
