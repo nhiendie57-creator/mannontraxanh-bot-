@@ -20,6 +20,8 @@ const {
 const DATA_FILE = path.join(__dirname, 'hinh_data.json');
 const DM_REMINDER =
     'Bạn nhỏ check tin nhắn DM xem có link hay chưa? Hay bạn nhỏ xem mình có cài nhận tin nhắn không nhé!';
+const ALREADY_SENT_REMINDER =
+    'Bạn nhỏ ơi, nãy bạn gửi proof nhận character này rồi á, bạn nhỏ thử kiểm tra xem có nhận được qua tin nhắn DM hoặc là mình có mở mục nhận DM chưa nhé 🍵💌';
 const MAX_TRIGGERS_PER_PAGE = 25;
 
 const EMPTY_DATA = {
@@ -769,7 +771,7 @@ client.on('messageCreate', async message => {
 
     const lockKey = `${keyword}:${message.author.id}`;
     if (trigger.sendOnce && trigger.sentUsers.includes(message.author.id)) {
-        await sendTemporaryMessage(message.channel, DM_REMINDER, message.author.id);
+        await sendTemporaryMessage(message.channel, ALREADY_SENT_REMINDER, message.author.id);
         return;
     }
 
